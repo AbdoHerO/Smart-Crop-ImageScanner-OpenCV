@@ -470,3 +470,9 @@ if __name__ == "__main__":
         im_files = [f for f in os.listdir(im_dir) if get_ext(f) in valid_formats]
         for im in im_files:
             scanner.scan(im_dir + '/' + im)
+
+    # # # Scan Locally
+    # interactive_mode = True
+    # im_file_path = 'images/model06.jpeg'
+    # scanner = DocScanner(interactive_mode)
+    # scanner.scan(im_file_path)
