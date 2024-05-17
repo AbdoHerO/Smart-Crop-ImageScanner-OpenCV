@@ -439,7 +439,36 @@ class DocScanner(object):
         # save the transformed image
         basename = os.path.basename(image_path)
         cv2.imwrite(OUTPUT_DIR + '/' + basename, thresh)
+
+        # Save the transformed image with original size
+        cv2.imwrite(OUTPUT_DIR + '/' + "cropped_" + basename, warped)
         print("Proccessed " + basename)
+
+        # return the coordinates of the contour
+        coordinates = screenCnt * ratio
+        return coordinates.tolist()
+
+    # def crop_image(self, image_path, coordinates):
+    #     image = cv2.imread(image_path)
+    #     assert (image is not None)
+    #
+    #     # Convert coordinates to integer
+    #     coordinates = np.array(coordinates, dtype=np.int32)
+    #
+    #     # Get the bounding box coordinates
+    #     x, y, w, h = cv2.boundingRect(coordinates)
+    #
+    #     # Crop the image
+    #     cropped_image = image[y:y + h, x:x + w]
+    #
+    #     # Save the cropped image
+    #     OUTPUT_DIR = 'output'
+    #     basename = os.path.basename(image_path)
+    #     cropped_basename = f"cropped_{basename}"
+    #     cv2.imwrite(os.path.join(OUTPUT_DIR, cropped_basename), cropped_image)
+    #     print("Cropped and saved " + cropped_basename)
+    #
+    #     return cropped_image
 
 
 if __name__ == "__main__":
@@ -463,13 +492,18 @@ if __name__ == "__main__":
 
     # Scan single image specified by command line argument --image <IMAGE_PATH>
     if im_file_path:
-        scanner.scan(im_file_path)
+        coordinates = scanner.scan(im_file_path)
+        print("Coordinates of the document corners:", coordinates)
+        # print("im_file_path:", im_file_path)
+        # scanner.crop_image(im_file_path, coordinates)
 
     # Scan all valid images in directory specified by command line argument --images <IMAGE_DIR>
     else:
         im_files = [f for f in os.listdir(im_dir) if get_ext(f) in valid_formats]
         for im in im_files:
-            scanner.scan(im_dir + '/' + im)
+            coordinates = scanner.scan(im_dir + '/' + im)
+            # print("Coordinates of the document corners for", im, ":", coordinates)
+            # scanner.crop_image(os.path.join(im_dir, im), coordinates)
 
     # # # Scan Locally
     # interactive_mode = True
