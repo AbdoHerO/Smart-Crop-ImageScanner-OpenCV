@@ -34,15 +34,15 @@ model_settings_magicpro_filter = {
         'dilate_iterations': 3
     },
     'SOPHADIMS': {
-        'gaussian_blur': (3, 3),
+        'gaussian_blur': (5, 5),
         'clahe_clip_limit': 4.0,
-        'clahe_tile_grid_size': (40, 40),
-        'contrast_alpha': 1.5,
+        'clahe_tile_grid_size': (45, 45),
+        'contrast_alpha': 1.6,
         'brightness_beta': 30,
         'adaptive_thresh_block_size': 11,
         'adaptive_thresh_C': 30,
         'dilate_kernel_size': (1, 1),
-        'dilate_iterations': 1
+        'dilate_iterations': 2
     },
     'GPM': {
         'gaussian_blur': (3, 3),
@@ -67,12 +67,12 @@ model_settings_magicpro_filter = {
         'dilate_iterations': 2
     },
     'COOPER': {
-        'gaussian_blur': (3, 3),
-        'clahe_clip_limit': 4.0,
-        'clahe_tile_grid_size': (40, 40),
-        'contrast_alpha': 1.5,
-        'brightness_beta': 30,
-        'adaptive_thresh_block_size': 11,
+        'gaussian_blur': (5, 5),
+        'clahe_clip_limit': 5.0,
+        'clahe_tile_grid_size': (30, 30),
+        'contrast_alpha': 1.4,
+        'brightness_beta': 40,
+        'adaptive_thresh_block_size': 7,
         'adaptive_thresh_C': 30,
         'dilate_kernel_size': (1, 1),
         'dilate_iterations': 3

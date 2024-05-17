@@ -1,8 +1,23 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
+from wand.image import Image as WandImage
 
 import constants
+
+
+def straighten_image_with_imagemagick(image_path):
+    with WandImage(filename=image_path) as img:
+        img.deskew(0.4 * img.quantum_range)  # Deskew the image
+        img_path = 'temp_straightened_image.png'
+        img.save(filename=img_path)
+        return img_path
+
+def show_image(image, title="Image"):
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    plt.title(title)
+    plt.axis('off')
+    plt.show()
 
 
 def apply_magic_pro_filter(image_path, output_path, model):
@@ -11,8 +26,17 @@ def apply_magic_pro_filter(image_path, output_path, model):
     image = cv2.imread(image_path)
     assert image is not None, "Failed to load image"
 
+    # # Straighten the image using ImageMagick
+    # straightened_image_path = straighten_image_with_imagemagick(image_path)
+    # straightened_image = cv2.imread(straightened_image_path)
+    # assert straightened_image is not None, "Failed to load straightened image"
+    #
+    # # Show the straightened image
+    # show_image(straightened_image, title="Straightened Image")
+
     """ Clear Magic Pro Filter  """
     # Apply Gaussian Blur to reduce noise
+    # blurred = cv2.GaussianBlur(straightened_image, settings['gaussian_blur'], 0)
     blurred = cv2.GaussianBlur(image, settings['gaussian_blur'], 0)
 
     # Convert to LAB color space to work with brightness
@@ -65,6 +89,6 @@ def apply_magic_pro_filter(image_path, output_path, model):
 
 if __name__ == "__main__":
     # input_image_path = 'output/BL_scanned_1_1.jpg'  # cropped_model05.jpeg
-    input_image_path = 'output/cropped_model03.jpeg'  # cropped_model05.jpeg
+    input_image_path = 'output/cropped_model02.jpeg'  # cropped_model05.jpeg
     output_image_path = 'output/filtered_image.jpg'
-    apply_magic_pro_filter(input_image_path, output_image_path, 'SOPHADIMS')
+    apply_magic_pro_filter(input_image_path, output_image_path, 'COOPER')
