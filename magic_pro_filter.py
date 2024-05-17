@@ -89,6 +89,6 @@ def apply_magic_pro_filter(image_path, output_path, model):
 
 if __name__ == "__main__":
     # input_image_path = 'output/BL_scanned_1_1.jpg'  # cropped_model05.jpeg
-    input_image_path = 'output/cropped_model02.jpeg'  # cropped_model05.jpeg
+    input_image_path = 'output/cropped_model03.jpeg'  # cropped_model05.jpeg
     output_image_path = 'output/filtered_image.jpg'
-    apply_magic_pro_filter(input_image_path, output_image_path, 'COOPER')
+    apply_magic_pro_filter(input_image_path, output_image_path, 'SOPHADIMS')

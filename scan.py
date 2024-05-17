@@ -441,11 +441,14 @@ class DocScanner(object):
         cv2.imwrite(OUTPUT_DIR + '/' + basename, thresh)
 
         # Save the transformed image with original size
-        cv2.imwrite(OUTPUT_DIR + '/' + "cropped_" + basename, warped)
-        print("Proccessed " + basename)
+        cropped_path = OUTPUT_DIR + '/' + "cropped_" + basename
+        cv2.imwrite(cropped_path, warped)
+        print("Processed " + basename)
 
         # return the coordinates of the contour
         coordinates = screenCnt * ratio
+
+        self.deskew_image(cropped_path, coordinates)
         return coordinates.tolist()
 
     def deskew_image(self, image_path, coordinates):
@@ -453,7 +456,7 @@ class DocScanner(object):
         Deskew the image based on the provided coordinates.
         """
         image = cv2.imread(image_path)
-        assert (image is not None)
+        assert(image is not None)
 
         # Convert coordinates to integer
         coordinates = np.array(coordinates, dtype=np.int32)
@@ -479,8 +482,26 @@ class DocScanner(object):
         # Rotate the image to deskew it
         center = (image.shape[1] // 2, image.shape[0] // 2)
         rotation_matrix = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
-        deskewed_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]),
-                                        flags=cv2.INTER_LINEAR)
+        deskewed_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]), flags=cv2.INTER_LINEAR)
+
+        """ Fill tha part black in image with color white START """
+
+        # # Convert the image to grayscale
+        # gray = cv2.cvtColor(deskewed_image, cv2.COLOR_BGR2GRAY)
+        #
+        # # Create a mask where black pixels are marked
+        # _, mask = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
+        #
+        # # Invert the mask to get black areas
+        # mask = cv2.bitwise_not(mask)
+        #
+        # # Create a white image with the same dimensions as the deskewed image
+        # white_img = np.ones_like(deskewed_image, dtype=np.uint8) * 255
+        #
+        # # Use the mask to fill the black areas with white
+        # deskewed_image = cv2.bitwise_or(deskewed_image, white_img, mask=mask)
+
+        """ Fill tha part black in image with color white END """
 
         # Save the deskewed image
         OUTPUT_DIR = 'output'
@@ -515,16 +536,15 @@ if __name__ == "__main__":
     if im_file_path:
         coordinates = scanner.scan(im_file_path)
         print("Coordinates of the document corners:", coordinates)
-        # print("im_file_path:", im_file_path)
-        # scanner.crop_image(im_file_path, coordinates)
+        scanner.deskew_image(im_file_path, coordinates)
+
 
     # Scan all valid images in directory specified by command line argument --images <IMAGE_DIR>
     else:
         im_files = [f for f in os.listdir(im_dir) if get_ext(f) in valid_formats]
         for im in im_files:
             coordinates = scanner.scan(im_dir + '/' + im)
-            # print("Coordinates of the document corners for", im, ":", coordinates)
-            # scanner.crop_image(os.path.join(im_dir, im), coordinates)
+            scanner.deskew_image(im_dir + '/' + im, coordinates)
 
     # # # Scan Locally
     # interactive_mode = True

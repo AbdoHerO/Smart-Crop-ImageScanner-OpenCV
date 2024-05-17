@@ -35,9 +35,9 @@ model_settings_magicpro_filter = {
     },
     'SOPHADIMS': {
         'gaussian_blur': (5, 5),
-        'clahe_clip_limit': 4.0,
-        'clahe_tile_grid_size': (45, 45),
-        'contrast_alpha': 1.6,
+        'clahe_clip_limit': 5.0,
+        'clahe_tile_grid_size': (40, 40),
+        'contrast_alpha': 1.5,
         'brightness_beta': 30,
         'adaptive_thresh_block_size': 11,
         'adaptive_thresh_C': 30,
