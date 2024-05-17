@@ -451,7 +451,7 @@ class DocScanner(object):
         self.deskew_image(cropped_path, coordinates)
         return coordinates.tolist()
 
-    def deskew_image(self, image_path, coordinates):
+    def deskew_image(self, image_path, coordinates, max_angle=0):
         """
         Deskew the image based on the provided coordinates.
         """
@@ -471,13 +471,12 @@ class DocScanner(object):
 
         # Find the longer horizontal edge
         if top_edge > bottom_edge:
-            long_edge = top_edge
-            short_edge = left_edge
             rotation_angle = np.degrees(np.arctan2(tr[1] - tl[1], tr[0] - tl[0]))
         else:
-            long_edge = bottom_edge
-            short_edge = right_edge
             rotation_angle = np.degrees(np.arctan2(br[1] - bl[1], br[0] - bl[0]))
+
+        # Limit the rotation angle to the specified max_angle
+        rotation_angle = np.clip(rotation_angle, -max_angle, max_angle)
 
         # Rotate the image to deskew it
         center = (image.shape[1] // 2, image.shape[0] // 2)
@@ -485,21 +484,6 @@ class DocScanner(object):
         deskewed_image = cv2.warpAffine(image, rotation_matrix, (image.shape[1], image.shape[0]), flags=cv2.INTER_LINEAR)
 
         """ Fill tha part black in image with color white START """
-
-        # # Convert the image to grayscale
-        # gray = cv2.cvtColor(deskewed_image, cv2.COLOR_BGR2GRAY)
-        #
-        # # Create a mask where black pixels are marked
-        # _, mask = cv2.threshold(gray, 1, 255, cv2.THRESH_BINARY)
-        #
-        # # Invert the mask to get black areas
-        # mask = cv2.bitwise_not(mask)
-        #
-        # # Create a white image with the same dimensions as the deskewed image
-        # white_img = np.ones_like(deskewed_image, dtype=np.uint8) * 255
-        #
-        # # Use the mask to fill the black areas with white
-        # deskewed_image = cv2.bitwise_or(deskewed_image, white_img, mask=mask)
 
         """ Fill tha part black in image with color white END """
 
@@ -536,7 +520,6 @@ if __name__ == "__main__":
     if im_file_path:
         coordinates = scanner.scan(im_file_path)
         print("Coordinates of the document corners:", coordinates)
-        scanner.deskew_image(im_file_path, coordinates)
 
 
     # Scan all valid images in directory specified by command line argument --images <IMAGE_DIR>
@@ -544,7 +527,6 @@ if __name__ == "__main__":
         im_files = [f for f in os.listdir(im_dir) if get_ext(f) in valid_formats]
         for im in im_files:
             coordinates = scanner.scan(im_dir + '/' + im)
-            scanner.deskew_image(im_dir + '/' + im, coordinates)
 
     # # # Scan Locally
     # interactive_mode = True
