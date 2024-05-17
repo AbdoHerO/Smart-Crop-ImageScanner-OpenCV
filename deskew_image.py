@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import os
 from scipy.spatial import distance as dist
+from matplotlib import pyplot as plt
 
 
 def deskew_image(image_path, coordinates, max_angle=0):
@@ -49,7 +50,6 @@ def deskew_image(image_path, coordinates, max_angle=0):
 
     return deskewed_image
 
+coordinates = [[247.2, 14.399999999999999], [1348.8, 60.0], [1480.8, 1161.6], [62.4, 1173.6]]
 
-coordinates = [[146.4, 0.0], [1370.3999999999999, 31.2], [1507.2, 1147.2], [4.8, 1192.8]]
-
-deskew_image("output/cropped_model05.jpeg", coordinates)
+deskew_image("images/model01.jpeg", coordinates)
