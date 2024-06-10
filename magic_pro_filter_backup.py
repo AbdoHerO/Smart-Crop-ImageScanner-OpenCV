@@ -5,6 +5,7 @@ from wand.image import Image as WandImage
 
 import constants
 
+
 def straighten_image_with_imagemagick(image_path):
     with WandImage(filename=image_path) as img:
         img.deskew(0.4 * img.quantum_range)  # Deskew the image
@@ -18,13 +19,24 @@ def show_image(image, title="Image"):
     plt.axis('off')
     plt.show()
 
+
 def apply_magic_pro_filter(image_path, output_path, model):
     settings = constants.model_settings_magicpro_filter[model]
 
     image = cv2.imread(image_path)
     assert image is not None, "Failed to load image"
 
+    # # Straighten the image using ImageMagick
+    # straightened_image_path = straighten_image_with_imagemagick(image_path)
+    # straightened_image = cv2.imread(straightened_image_path)
+    # assert straightened_image is not None, "Failed to load straightened image"
+    #
+    # # Show the straightened image
+    # show_image(straightened_image, title="Straightened Image")
+
+    """ Clear Magic Pro Filter  """
     # Apply Gaussian Blur to reduce noise
+    # blurred = cv2.GaussianBlur(straightened_image, settings['gaussian_blur'], 0)
     blurred = cv2.GaussianBlur(image, settings['gaussian_blur'], 0)
 
     # Convert to LAB color space to work with brightness
@@ -41,11 +53,11 @@ def apply_magic_pro_filter(image_path, output_path, model):
     # Convert back to BGR color space
     enhanced_image = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
 
-    # Apply noise reduction
-    denoised_image = cv2.fastNlMeansDenoisingColored(enhanced_image, None, settings['h'], settings['hForColorComponents'], settings['templateWindowSize'], settings['searchWindowSize'])
+    """ Clear the white fog or beam effect in the image """
 
+    """ Increase contrast and brightness (lighting) """
     # Increase contrast and brightness
-    adjusted = cv2.convertScaleAbs(denoised_image, alpha=settings['contrast_alpha'], beta=settings['brightness_beta'])
+    adjusted = cv2.convertScaleAbs(enhanced_image, alpha=settings['contrast_alpha'], beta=settings['brightness_beta'])
 
     # Apply sharpening kernel
     kernel = np.array([[0, -1, 0],
@@ -53,6 +65,7 @@ def apply_magic_pro_filter(image_path, output_path, model):
                        [0, -1, 0]])
     sharpened = cv2.filter2D(adjusted, -1, kernel)
 
+    """ Create Mask of the Thickened text """
     # Convert to grayscale
     gray = cv2.cvtColor(sharpened, cv2.COLOR_BGR2GRAY)
 
@@ -64,6 +77,7 @@ def apply_magic_pro_filter(image_path, output_path, model):
     kernel = np.ones(settings['dilate_kernel_size'], np.uint8)
     thickened = cv2.dilate(binary, kernel, iterations=settings['dilate_iterations'])
 
+    """ Apply the Mask of the Thickened text """
     # Merge thickened text back with the original color image
     colored_thickened = cv2.bitwise_and(sharpened, sharpened, mask=thickened)
 
@@ -78,11 +92,15 @@ def apply_magic_pro_filter(image_path, output_path, model):
     hsv_colored = cv2.merge([h, s, v])
     final_image = cv2.cvtColor(hsv_colored, cv2.COLOR_HSV2BGR)
 
+
+    """ Save the image transformed """
     # Save the result
     cv2.imwrite(output_path, final_image)
     print(f"Filtered image saved to {output_path}")
 
+
 if __name__ == "__main__":
-    input_image_path = 'output/cropped_spr_iphn.jpg'
+    # input_image_path = 'output/BL_scanned_1_1.jpg'  # cropped_model05.jpeg
+    input_image_path = 'output/cropped_spr_iphn.jpg'  # cropped_model05.jpeg
     output_image_path = 'output/filtered_cropped_spr_iphn.jpg'
     apply_magic_pro_filter(input_image_path, output_image_path, 'SPR')

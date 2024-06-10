@@ -23,21 +23,16 @@ model_settings_magicpro_filter = {
         'dilate_iterations': 1
     },
     'SPR': {
-        'gaussian_blur': (5, 5),
+        'gaussian_blur': (3, 3),
         'clahe_clip_limit': 2.5,
         'clahe_tile_grid_size': (100, 100),
         'contrast_alpha': 1.1,
-        'brightness_beta': 20,
-        'adaptive_thresh_block_size': 15,
+        'brightness_beta': 15,
+        'adaptive_thresh_block_size': 13,
         'adaptive_thresh_C': 100,
         'dilate_kernel_size': (1, 1),
         'dilate_iterations': 1,
-        'saturation_factor': 2.0,  # Increase this value to concentrate colors more
-        'h': 10,  # Filter strength for luminance component
-        'hForColorComponents': 10,  # Same as h but for color components
-        'templateWindowSize': 0,  # Size in pixels of the template patch that is used to compute weights
-        'searchWindowSize': 41  # Size in pixels of the window that is used to compute weighted average for given pixel
-
+        'saturation_factor': 2.5
     },
     'SOPHADIMS': {
         'gaussian_blur': (5, 5),

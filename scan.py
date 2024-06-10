@@ -415,7 +415,7 @@ class DocScanner(object):
 
         ratio = image.shape[0] / RESCALED_HEIGHT
         orig = image.copy()
-        rescaled_image = imutils.resize(image, height = int(RESCALED_HEIGHT))
+        rescaled_image = imutils.resize(image, height=int(RESCALED_HEIGHT))
 
         # get the contour of the document
         screenCnt = self.get_contour(rescaled_image)
