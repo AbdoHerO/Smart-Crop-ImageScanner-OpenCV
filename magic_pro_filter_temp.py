@@ -3,6 +3,7 @@ import numpy as np
 from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel, Frame, Scrollbar, Canvas, Entry, filedialog, StringVar, OptionMenu
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from PIL import Image, ImageTk
+from constants_temp import model_settings_magicpro_filter
 
 original_image = None
 
@@ -366,26 +367,6 @@ canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("
 frame = Frame(canvas)
 canvas.create_window((0, 0), window=frame, anchor="nw")
 
-# # Add a label and entry for model name
-# model_name_var = StringVar()
-# model_name_label = Label(frame, text="Model Name")
-# model_name_label.grid(row=11, column=0, padx=5, pady=5)
-# model_name_entry = Entry(frame, textvariable=model_name_var)
-# model_name_entry.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
-
-# Add a label and entry for model name
-model_name_var = StringVar()
-model_name_var.set("GLOBAL")  # Set default value
-model_name_label = Label(frame, text="Model Name")
-model_name_label.grid(row=11, column=0, padx=5, pady=5)
-# Create a dropdown menu for model names
-model_names = ['GLOBAL', 'SOPHACA', 'SPR', 'GPM', 'SOPHADIMS', 'RECAMED', 'COOPER']
-model_name_dropdown = OptionMenu(frame, model_name_var, *model_names)
-model_name_dropdown.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
-
-# Add a button to export the filter settings
-export_button = Button(frame, text="Export Filter", command=export_filter)
-export_button.grid(row=12, column=0, columnspan=3, padx=5, pady=5)
 
 # Create sliders for each parameter
 blur_slider = Scale(frame, from_=1, to=20, resolution=2, orient=HORIZONTAL, label="Gaussian Blur")
@@ -474,6 +455,67 @@ black_color_button.grid(row=6, column=2, padx=5, pady=5)
 # Add button to open color palette settings
 Button(frame, text="Open Color Palette Settings", command=open_palette_settings).grid(row=7, column=0, columnspan=3, padx=5, pady=5)
 
+
+""" ***************** Add a label and entry for model name """
+
+
+def load_model_settings(*args):
+    model_name = model_name_var.get()
+    settings = model_settings_magicpro_filter.get(model_name, {})
+    if settings:
+        blur_slider.set(settings['gaussian_blur'][0])
+        clahe_clip_limit_slider.set(settings['clahe_clip_limit'])
+        clahe_tile_grid_size_slider.set(settings['clahe_tile_grid_size'][0])
+        contrast_alpha_slider.set(settings['contrast_alpha'])
+        brightness_beta_slider.set(settings['brightness_beta'])
+        adaptive_thresh_block_size_slider.set(settings['adaptive_thresh_block_size'])
+        adaptive_thresh_C_slider.set(settings['adaptive_thresh_C'])
+        dilate_kernel_size_slider.set(settings['dilate_kernel_size'][0])
+        dilate_iterations_slider.set(settings['dilate_iterations'])
+        saturation_factor_slider.set(settings['saturation_factor'])
+        h_slider.set(settings['h'])
+        hForColorComponents_slider.set(settings['hForColorComponents'])
+        templateWindowSize_slider.set(settings['templateWindowSize'])
+        searchWindowSize_slider.set(settings['searchWindowSize'])
+        adaptive_thresh_block_size_2_slider.set(settings['adaptive_thresh_block_size_2'])
+        adaptive_thresh_C_2_slider.set(settings['adaptive_thresh_C_2'])
+        dilate_kernel_size_2_slider.set(settings['dilate_kernel_size_2'][0])
+        dilate_iterations_2_slider.set(settings['dilate_iterations_2'])
+        black_point_slider.set(settings['black_point'])
+
+        palette_settings['hue_shift'] = settings['color_palettes']['custom']['hue_shift']
+        palette_settings['saturation_factor'] = settings['color_palettes']['custom']['saturation_factor']
+        palette_settings['brightness_beta'] = settings['color_palettes']['custom']['brightness_beta']
+        palette_settings['white_intensity'] = settings['color_palettes']['custom']['white_intensity']
+        palette_settings['black_intensity'] = settings['color_palettes']['custom']['black_intensity']
+
+
+# Add a label and entry for model name
+model_name_var = StringVar()
+model_name_var.set("GLOBAL")  # Set default value
+model_name_label = Label(frame, text="Model Name")
+model_name_label.grid(row=11, column=0, padx=5, pady=5)
+
+# Create a dropdown menu for model names
+model_names = ['GLOBAL', 'SOPHACA', 'SPR', 'GPM', 'SOPHADIMS', 'RECAMED', 'COOPER']
+model_name_dropdown = OptionMenu(frame, model_name_var, *model_names)
+model_name_dropdown.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
+
+# Bind the load_model_settings function to model_name_var
+model_name_var.trace('w', load_model_settings)
+
+# Load the default model settings on startup
+load_model_settings()
+
+
+# Add a button to export the filter settings
+export_button = Button(frame, text="Export Filter", command=export_filter)
+export_button.grid(row=12, column=0, columnspan=3, padx=5, pady=5)
+
+
+""" ***************** Add a label and entry for model name """
+
+
 # Add buttons to open and save images
 Button(frame, text="Open Image", command=open_image).grid(row=8, column=0, columnspan=3, padx=5, pady=5)
 Button(frame, text="Save Image", command=save_image).grid(row=9, column=0, columnspan=3, padx=5, pady=5)
@@ -504,3 +546,4 @@ palette_settings = {
 }
 
 root.mainloop()
+
