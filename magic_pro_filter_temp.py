@@ -1,10 +1,23 @@
 import cv2
 import numpy as np
-from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel, messagebox, Frame
+from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel, Frame, Scrollbar, Canvas, Entry, filedialog, StringVar, OptionMenu
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from PIL import Image, ImageTk
 
+original_image = None
+
+palette_settings = {
+    'hue_shift': 0,
+    'saturation_factor': 0.4,
+    'brightness_beta': 0,
+    'white_intensity': 1.0,
+    'black_intensity': 0.1
+}
+
 def apply_magic_pro_filter(image, settings):
+    if image is None or image.size == 0:
+        return None
+
     # Apply Gaussian Blur to reduce noise
     blurred = cv2.GaussianBlur(image, settings['gaussian_blur'], 0)
 
@@ -103,13 +116,13 @@ def apply_color_palette(image, palette_settings):
     image = cv2.convertScaleAbs(image, alpha=1.0, beta=palette_settings.get('brightness_beta', 0))
 
     # Apply white intensity adjustment
-    white_intensity = palette_settings.get('white_intensity', 1.0)
+    white_intensity = palette_settings.get('white_intensity', 1.0) or 1.0
     white_mask = cv2.inRange(image, np.array([200, 200, 200]), np.array([255, 255, 255]))
     if white_intensity != 1.0:
         image[white_mask != 0] = cv2.convertScaleAbs(image[white_mask != 0], alpha=white_intensity, beta=0)
 
     # Apply black intensity adjustment
-    black_intensity = palette_settings.get('black_intensity', 1.0)
+    black_intensity = palette_settings.get('black_intensity', 1.0) or 1.0
     black_mask = cv2.inRange(image, np.array([0, 0, 0]), np.array([50, 50, 50]))
     if black_intensity != 1.0:
         image[black_mask != 0] = cv2.convertScaleAbs(image[black_mask != 0], alpha=black_intensity, beta=0)
@@ -117,13 +130,16 @@ def apply_color_palette(image, palette_settings):
     return image
 
 def update_image():
+    global original_image
+    if original_image is None:
+        return
     settings = {
         'gaussian_blur': (blur_slider.get(), blur_slider.get()),
         'clahe_clip_limit': clahe_clip_limit_slider.get(),
         'clahe_tile_grid_size': (clahe_tile_grid_size_slider.get(), clahe_tile_grid_size_slider.get()),
         'contrast_alpha': contrast_alpha_slider.get(),
         'brightness_beta': brightness_beta_slider.get(),
-        'adaptive_thresh_block_size': adaptive_thresh_block_size_slider.get(),
+        'adaptive_thresh_block_size': adaptive_thresh_block_size_slider.get() | 1,  # Ensure odd number
         'adaptive_thresh_C': adaptive_thresh_C_slider.get(),
         'dilate_kernel_size': (dilate_kernel_size_slider.get(), dilate_kernel_size_slider.get()),
         'dilate_iterations': dilate_iterations_slider.get(),
@@ -132,7 +148,7 @@ def update_image():
         'hForColorComponents': hForColorComponents_slider.get(),
         'templateWindowSize': templateWindowSize_slider.get(),
         'searchWindowSize': searchWindowSize_slider.get(),
-        'adaptive_thresh_block_size_2': adaptive_thresh_block_size_2_slider.get(),
+        'adaptive_thresh_block_size_2': adaptive_thresh_block_size_2_slider.get() | 1,  # Ensure odd number
         'adaptive_thresh_C_2': adaptive_thresh_C_2_slider.get(),
         'dilate_kernel_size_2': (dilate_kernel_size_2_slider.get(), dilate_kernel_size_2_slider.get()),
         'dilate_iterations_2': dilate_iterations_2_slider.get(),
@@ -140,13 +156,17 @@ def update_image():
     }
 
     processed_image = apply_magic_pro_filter(original_image, settings)
+    if processed_image is None:
+        return
 
     # Apply color palette if specified
     if palette_settings:
         processed_image = apply_color_palette(processed_image, palette_settings)
 
-    img = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
-    imgtk = ImageTk.PhotoImage(image=img)
+    # Resize the image to fit within the display area
+    display_image = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
+    display_image.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+    imgtk = ImageTk.PhotoImage(image=display_image)
     image_label.imgtk = imgtk
     image_label.configure(image=imgtk)
 
@@ -173,7 +193,7 @@ def save_image():
         'hForColorComponents': hForColorComponents_slider.get(),
         'templateWindowSize': templateWindowSize_slider.get(),
         'searchWindowSize': searchWindowSize_slider.get(),
-                'adaptive_thresh_block_size_2': adaptive_thresh_block_size_2_slider.get(),
+        'adaptive_thresh_block_size_2': adaptive_thresh_block_size_2_slider.get(),
         'adaptive_thresh_C_2': adaptive_thresh_C_2_slider.get(),
         'dilate_kernel_size_2': (dilate_kernel_size_2_slider.get(), dilate_kernel_size_2_slider.get()),
         'dilate_iterations_2': dilate_iterations_2_slider.get(),
@@ -193,7 +213,6 @@ def choose_white_color():
         white_color = color_code[0]
         palette_settings['white_intensity'] = white_color
         white_color_button.config(bg=color_code[1])
-        update_image()
 
 def choose_black_color():
     global palette_settings
@@ -202,20 +221,18 @@ def choose_black_color():
         black_color = color_code[0]
         palette_settings['black_intensity'] = black_color
         black_color_button.config(bg=color_code[1])
-        update_image()
 
 def open_palette_settings():
     def apply_palette_settings():
         global palette_settings
         palette_settings = {
             'hue_shift': hue_shift_slider.get(),
-            'saturation_factor': saturation_factor_slider.get(),
-            'brightness_beta': brightness_beta_slider.get(),
+            'saturation_factor': saturation_factor_slider_palette.get(),
+            'brightness_beta': brightness_beta_slider_palette.get(),
             'white_intensity': white_intensity_slider.get(),
             'black_intensity': black_intensity_slider.get()
         }
         update_image()
-        palette_window.destroy()
 
     palette_window = Toplevel(root)
     palette_window.title("Color Palette Settings")
@@ -224,13 +241,13 @@ def open_palette_settings():
     hue_shift_slider.set(palette_settings.get('hue_shift', 0))
     hue_shift_slider.grid(row=0, column=0, padx=5, pady=5)
 
-    saturation_factor_slider = Scale(palette_window, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL, label="Saturation Factor")
-    saturation_factor_slider.set(palette_settings.get('saturation_factor', 1.0))
-    saturation_factor_slider.grid(row=0, column=1, padx=5, pady=5)
+    saturation_factor_slider_palette = Scale(palette_window, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL, label="Saturation Factor")
+    saturation_factor_slider_palette.set(palette_settings.get('saturation_factor', 1.0))
+    saturation_factor_slider_palette.grid(row=0, column=1, padx=5, pady=5)
 
-    brightness_beta_slider = Scale(palette_window, from_=-100, to=100, orient=HORIZONTAL, label="Brightness Beta")
-    brightness_beta_slider.set(palette_settings.get('brightness_beta', 0))
-    brightness_beta_slider.grid(row=1, column=0, padx=5, pady=5)
+    brightness_beta_slider_palette = Scale(palette_window, from_=-100, to=100, orient=HORIZONTAL, label="Brightness Beta")
+    brightness_beta_slider_palette.set(palette_settings.get('brightness_beta', 0))
+    brightness_beta_slider_palette.grid(row=1, column=0, padx=5, pady=5)
 
     white_intensity_slider = Scale(palette_window, from_=0.1, to=2, resolution=0.1, orient=HORIZONTAL, label="White Intensity")
     white_intensity_slider.set(palette_settings.get('white_intensity', 1.0))
@@ -242,103 +259,236 @@ def open_palette_settings():
 
     Button(palette_window, text="Apply", command=apply_palette_settings).grid(row=2, column=1, padx=5, pady=5)
 
+def export_filter():
+    model_name = model_name_var.get()
+    if not model_name:
+        print("Model name is required")
+        return
+
+    filter_settings = {
+        'gaussian_blur': (blur_slider.get(), blur_slider.get()),
+        'clahe_clip_limit': clahe_clip_limit_slider.get(),
+        'clahe_tile_grid_size': (clahe_tile_grid_size_slider.get(), clahe_tile_grid_size_slider.get()),
+        'contrast_alpha': contrast_alpha_slider.get(),
+        'brightness_beta': brightness_beta_slider.get(),
+        'adaptive_thresh_block_size': adaptive_thresh_block_size_slider.get() | 1,  # Ensure odd number
+        'adaptive_thresh_C': adaptive_thresh_C_slider.get(),
+        'dilate_kernel_size': (dilate_kernel_size_slider.get(), dilate_kernel_size_slider.get()),
+        'dilate_iterations': dilate_iterations_slider.get(),
+        'saturation_factor': saturation_factor_slider.get(),
+        'h': h_slider.get(),
+        'hForColorComponents': hForColorComponents_slider.get(),
+        'templateWindowSize': templateWindowSize_slider.get(),
+        'searchWindowSize': searchWindowSize_slider.get(),
+        'adaptive_thresh_block_size_2': adaptive_thresh_block_size_2_slider.get() | 1,  # Ensure odd number
+        'adaptive_thresh_C_2': adaptive_thresh_C_2_slider.get(),
+        'dilate_kernel_size_2': (dilate_kernel_size_2_slider.get(), dilate_kernel_size_2_slider.get()),
+        'dilate_iterations_2': dilate_iterations_2_slider.get(),
+        'black_point': black_point_slider.get(),
+        'color_palettes': {
+            'custom': {
+                'hue_shift': palette_settings['hue_shift'],
+                'saturation_factor': palette_settings['saturation_factor'],
+                'brightness_beta': palette_settings['brightness_beta'],
+                'white_intensity': palette_settings['white_intensity'],
+                'black_intensity': palette_settings['black_intensity']
+            }
+        }
+    }
+
+    # Read the existing constants_temp.py file
+    with open('constants_temp.py', 'r') as file:
+        lines = file.readlines()
+
+    # Find the model's dictionary and update it
+    model_found = False
+    for i, line in enumerate(lines):
+        if f"'{model_name}':" in line:
+            model_found = True
+            j = i + 1
+            while lines[j].strip() != '},' and lines[j].strip() != '}':
+                j += 1
+            # Delete the old settings for the model
+            del lines[i + 1:j]
+            # Insert new settings
+            insert_settings = [f"        '{key}': {value},\n" for key, value in filter_settings.items() if key != 'color_palettes']
+            color_palette_lines = [f"        'color_palettes': {{\n"]
+            for palette, settings in filter_settings['color_palettes'].items():
+                color_palette_lines.append(f"            '{palette}': {{\n")
+                color_palette_lines.extend([f"                '{k}': {v},\n" for k, v in settings.items()])
+            #     color_palette_lines.append("            },\n")
+            # color_palette_lines.append("        },\n")
+            lines[i + 1:i + 1] = insert_settings + color_palette_lines
+            break
+
+    # If the model was not found, append it correctly
+    if not model_found:
+        lines.append(f"    '{model_name}': {{\n")
+        lines.extend([f"        '{key}': {value},\n" for key, value in filter_settings.items() if key != 'color_palettes'])
+        lines.append("        'color_palettes': {\n")
+        for palette, settings in filter_settings['color_palettes'].items():
+            lines.append(f"            '{palette}': {{\n")
+            lines.extend([f"                '{k}': {v},\n" for k, v in settings.items()])
+            lines.append("            },\n")
+        lines.append("        },\n")
+        lines.append("    },\n")
+
+    # Write the updated settings back to constants_temp.py
+    with open('constants_temp.py', 'w') as file:
+        file.writelines(lines)
+
+    print(f"Filter settings for model '{model_name}' have been updated.")
+
+
+
 root = Tk()
 root.title("Image Filter Adjuster")
 
+# Create a main frame with horizontal layout
+main_frame = Frame(root)
+main_frame.pack(fill="both", expand=1)
+
+# Create a frame for controls and pack it to the left
+controls_frame = Frame(main_frame)
+controls_frame.pack(side="left", fill="both", expand=1)
+
+# Create a canvas and a vertical scrollbar to allow scrolling through the sliders
+canvas = Canvas(controls_frame)
+canvas.pack(side="left", fill="both", expand=1)
+
+scrollbar = Scrollbar(controls_frame, orient="vertical", command=canvas.yview)
+scrollbar.pack(side="right", fill="y")
+
+canvas.configure(yscrollcommand=scrollbar.set)
+canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+
+# Create another frame inside the canvas
+frame = Frame(canvas)
+canvas.create_window((0, 0), window=frame, anchor="nw")
+
+# # Add a label and entry for model name
+# model_name_var = StringVar()
+# model_name_label = Label(frame, text="Model Name")
+# model_name_label.grid(row=11, column=0, padx=5, pady=5)
+# model_name_entry = Entry(frame, textvariable=model_name_var)
+# model_name_entry.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
+
+# Add a label and entry for model name
+model_name_var = StringVar()
+model_name_var.set("GLOBAL")  # Set default value
+model_name_label = Label(frame, text="Model Name")
+model_name_label.grid(row=11, column=0, padx=5, pady=5)
+# Create a dropdown menu for model names
+model_names = ['GLOBAL', 'SOPHACA', 'SPR', 'GPM', 'SOPHADIMS', 'RECAMED', 'COOPER']
+model_name_dropdown = OptionMenu(frame, model_name_var, *model_names)
+model_name_dropdown.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
+
+# Add a button to export the filter settings
+export_button = Button(frame, text="Export Filter", command=export_filter)
+export_button.grid(row=12, column=0, columnspan=3, padx=5, pady=5)
+
 # Create sliders for each parameter
-blur_slider = Scale(root, from_=1, to=20, orient=HORIZONTAL, label="Gaussian Blur")
+blur_slider = Scale(frame, from_=1, to=20, resolution=2, orient=HORIZONTAL, label="Gaussian Blur")
 blur_slider.set(3)
-blur_slider.pack()
+blur_slider.grid(row=0, column=0, padx=5, pady=5)
 
-clahe_clip_limit_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="CLAHE Clip Limit")
+clahe_clip_limit_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="CLAHE Clip Limit")
 clahe_clip_limit_slider.set(1.5)
-clahe_clip_limit_slider.pack()
+clahe_clip_limit_slider.grid(row=0, column=1, padx=5, pady=5)
 
-clahe_tile_grid_size_slider = Scale(root, from_=1, to=100, orient=HORIZONTAL, label="CLAHE Tile Grid Size")
+clahe_tile_grid_size_slider = Scale(frame, from_=1, to=100, orient=HORIZONTAL, label="CLAHE Tile Grid Size")
 clahe_tile_grid_size_slider.set(20)
-clahe_tile_grid_size_slider.pack()
+clahe_tile_grid_size_slider.grid(row=0, column=2, padx=5, pady=5)
 
-contrast_alpha_slider = Scale(root, from_=0.1, to=3, resolution=0.1, orient=HORIZONTAL, label="Contrast Alpha")
+contrast_alpha_slider = Scale(frame, from_=0.1, to=3, resolution=0.1, orient=HORIZONTAL, label="Contrast Alpha")
 contrast_alpha_slider.set(1.1)
-contrast_alpha_slider.pack()
+contrast_alpha_slider.grid(row=1, column=0, padx=5, pady=5)
 
-brightness_beta_slider = Scale(root, from_=-100, to=100, orient=HORIZONTAL, label="Brightness Beta")
+brightness_beta_slider = Scale(frame, from_=-100, to=100, orient=HORIZONTAL, label="Brightness Beta")
 brightness_beta_slider.set(30)
-brightness_beta_slider.pack()
+brightness_beta_slider.grid(row=1, column=1, padx=5, pady=5)
 
-adaptive_thresh_block_size_slider = Scale(root, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size")
+adaptive_thresh_block_size_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size")
 adaptive_thresh_block_size_slider.set(85)
-adaptive_thresh_block_size_slider.pack()
+adaptive_thresh_block_size_slider.grid(row=1, column=2, padx=5, pady=5)
 
-adaptive_thresh_C_slider = Scale(root, from_=-100, to=100, orient=HORIZONTAL, label="Adaptive Threshold C")
+adaptive_thresh_C_slider = Scale(frame, from_=-100, to=100, orient=HORIZONTAL, label="Adaptive Threshold C")
 adaptive_thresh_C_slider.set(150)
-adaptive_thresh_C_slider.pack()
+adaptive_thresh_C_slider.grid(row=2, column=0, padx=5, pady=5)
 
-dilate_kernel_size_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="Dilate Kernel Size")
+dilate_kernel_size_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="Dilate Kernel Size")
 dilate_kernel_size_slider.set(1)
-dilate_kernel_size_slider.pack()
+dilate_kernel_size_slider.grid(row=2, column=1, padx=5, pady=5)
 
-dilate_iterations_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="Dilate Iterations")
+dilate_iterations_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="Dilate Iterations")
 dilate_iterations_slider.set(1)
-dilate_iterations_slider.pack()
+dilate_iterations_slider.grid(row=2, column=2, padx=5, pady=5)
 
-saturation_factor_slider = Scale(root, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL, label="Saturation Factor")
+saturation_factor_slider = Scale(frame, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL, label="Saturation Factor")
 saturation_factor_slider.set(3.0)
-saturation_factor_slider.pack()
+saturation_factor_slider.grid(row=3, column=0, padx=5, pady=5)
 
-h_slider = Scale(root, from_=0, to=100, orient=HORIZONTAL, label="Denoising Strength (h)")
+h_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Denoising Strength (h)")
 h_slider.set(5)
-h_slider.pack()
+h_slider.grid(row=3, column=1, padx=5, pady=5)
 
-hForColorComponents_slider = Scale(root, from_=0, to=100, orient=HORIZONTAL, label="Denoising Strength for Color Components (hForColorComponents)")
+hForColorComponents_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Denoising Strength for Color Components (hForColorComponents)")
 hForColorComponents_slider.set(0)
-hForColorComponents_slider.pack()
+hForColorComponents_slider.grid(row=3, column=2, padx=5, pady=5)
 
-templateWindowSize_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="Template Window Size")
+templateWindowSize_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="Template Window Size")
 templateWindowSize_slider.set(7)
-templateWindowSize_slider.pack()
+templateWindowSize_slider.grid(row=4, column=0, padx=5, pady=5)
 
-searchWindowSize_slider = Scale(root, from_=1, to=50, orient=HORIZONTAL, label="Search Window Size")
-searchWindowSize_slider.set(21)
-searchWindowSize_slider.pack()
+searchWindowSize_slider = Scale(frame, from_=1, to=50, orient=HORIZONTAL, label="Search Window Size")
+searchWindowSize_slider.set(1)
+searchWindowSize_slider.grid(row=4, column=1, padx=5, pady=5)
 
-adaptive_thresh_block_size_2_slider = Scale(root, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size 2")
+adaptive_thresh_block_size_2_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size 2")
 adaptive_thresh_block_size_2_slider.set(95)
-adaptive_thresh_block_size_2_slider.pack()
+adaptive_thresh_block_size_2_slider.grid(row=4, column=2, padx=5, pady=5)
 
-adaptive_thresh_C_2_slider = Scale(root, from_=-100, to=100, orient=HORIZONTAL, label="Adaptive Threshold C 2")
+adaptive_thresh_C_2_slider = Scale(frame, from_=-100, to=100, orient=HORIZONTAL, label="Adaptive Threshold C 2")
 adaptive_thresh_C_2_slider.set(100)
-adaptive_thresh_C_2_slider.pack()
+adaptive_thresh_C_2_slider.grid(row=5, column=0, padx=5, pady=5)
 
-dilate_kernel_size_2_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="Dilate Kernel Size 2")
+dilate_kernel_size_2_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="Dilate Kernel Size 2")
 dilate_kernel_size_2_slider.set(1)
-dilate_kernel_size_2_slider.pack()
+dilate_kernel_size_2_slider.grid(row=5, column=1, padx=5, pady=5)
 
-dilate_iterations_2_slider = Scale(root, from_=1, to=10, orient=HORIZONTAL, label="Dilate Iterations 2")
+dilate_iterations_2_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="Dilate Iterations 2")
 dilate_iterations_2_slider.set(1)
-dilate_iterations_2_slider.pack()
+dilate_iterations_2_slider.grid(row=5, column=2, padx=5, pady=5)
 
-black_point_slider = Scale(root, from_=0, to=100, orient=HORIZONTAL, label="Black Point")
+black_point_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Black Point")
 black_point_slider.set(10)
-black_point_slider.pack()
+black_point_slider.grid(row=6, column=0, padx=5, pady=5)
 
 # Add color picker buttons for white and black intensities
-white_color_button = Button(root, text="Choose White Color", command=choose_white_color)
-white_color_button.pack()
+white_color_button = Button(frame, text="Choose White Color", command=choose_white_color)
+white_color_button.grid(row=6, column=1, padx=5, pady=5)
 
-black_color_button = Button(root, text="Choose Black Color", command=choose_black_color)
-black_color_button.pack()
+black_color_button = Button(frame, text="Choose Black Color", command=choose_black_color)
+black_color_button.grid(row=6, column=2, padx=5, pady=5)
 
 # Add button to open color palette settings
-Button(root, text="Open Color Palette Settings", command=open_palette_settings).pack()
+Button(frame, text="Open Color Palette Settings", command=open_palette_settings).grid(row=7, column=0, columnspan=3, padx=5, pady=5)
 
 # Add buttons to open and save images
-Button(root, text="Open Image", command=open_image).pack()
-Button(root, text="Save Image", command=save_image).pack()
+Button(frame, text="Open Image", command=open_image).grid(row=8, column=0, columnspan=3, padx=5, pady=5)
+Button(frame, text="Save Image", command=save_image).grid(row=9, column=0, columnspan=3, padx=5, pady=5)
+
+# Add Apply button to apply changes
+apply_button = Button(frame, text="Apply", command=update_image)
+apply_button.grid(row=10, column=0, columnspan=3, padx=5, pady=5)
+
+# Create a frame for the image and pack it to the right
+image_frame = Frame(main_frame)
+image_frame.pack(side="right", fill="both", expand=1)
 
 # Add a label to display the image
-image_label = Label(root)
-image_label.pack()
+image_label = Label(image_frame)
+image_label.pack(fill="both", expand=1)
 
 # Initialize color variables
 white_color = (255, 255, 255)
@@ -354,4 +504,3 @@ palette_settings = {
 }
 
 root.mainloop()
-
