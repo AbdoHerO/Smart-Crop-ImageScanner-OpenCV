@@ -98,11 +98,7 @@ model_settings_magicpro_filter = {
         'dilate_kernel_size_2': (1, 1),
         'dilate_iterations_2': 1,
 
-        'black_point': 10,  # Adjust black point
-        # 'warmth': 2,  # Adjust warmth
-        # 'tint': 2,  # Adjust tint
-        # 'brilliance': 80,  # Adjust brilliance
-        # 'exposure': 1.0  # Adjust exposure
+        'black_point': 10,
 
         'color_palettes': {
             'custom': {

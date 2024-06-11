@@ -392,7 +392,7 @@ blur_slider = Scale(frame, from_=1, to=20, resolution=2, orient=HORIZONTAL, labe
 blur_slider.set(3)
 blur_slider.grid(row=0, column=0, padx=5, pady=5)
 
-clahe_clip_limit_slider = Scale(frame, from_=1, to=10, orient=HORIZONTAL, label="CLAHE Clip Limit")
+clahe_clip_limit_slider = Scale(frame, from_=1, to=10, resolution=0.1, orient=HORIZONTAL, label="CLAHE Clip Limit")
 clahe_clip_limit_slider.set(1.5)
 clahe_clip_limit_slider.grid(row=0, column=1, padx=5, pady=5)
 
