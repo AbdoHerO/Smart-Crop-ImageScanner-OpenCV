@@ -1,22 +1,10 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
-from wand.image import Image as WandImage
-
+from tkinter import Tk, Scale, HORIZONTAL, Button, Label
+from tkinter.filedialog import askopenfilename, asksaveasfilename
+from PIL import Image, ImageTk
 import constants
-
-def straighten_image_with_imagemagick(image_path):
-    with WandImage(filename=image_path) as img:
-        img.deskew(0.4 * img.quantum_range)  # Deskew the image
-        img_path = 'temp_straightened_image.png'
-        img.save(filename=img_path)
-        return img_path
-
-def show_image(image, title="Image"):
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    plt.title(title)
-    plt.axis('off')
-    plt.show()
 
 def apply_color_palette(image, palette_settings):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -146,13 +134,20 @@ def apply_magic_pro_filter(image_path, output_path, model, palette_name=None):
     cv2.imwrite(output_path, final_image_colored_thickened)
     print(f"Filtered image saved to {output_path}")
 
+
 if __name__ == "__main__":
     palette_name = 'custom'  # Change to the desired palette name
 
-    input_image_path = 'output/cropped_sophaca_iphn.jpg'
-    output_image_path = 'output/filtered_cropped_sophaca_iphn.jpg'
-    apply_magic_pro_filter(input_image_path, output_image_path, 'SOPHACA', palette_name)
+    # input_image_path = 'output/cropped_sophaca_iphn.jpg'
+    # output_image_path = 'output/filtered_cropped_sophaca_iphn.jpg'
+    # apply_magic_pro_filter(input_image_path, output_image_path, 'SOPHACA', palette_name)
 
     # input_image_path = 'output/cropped_spr_iphn.jpg'
     # output_image_path = 'output/filtered_cropped_spr_iphn.jpg'
     # apply_magic_pro_filter(input_image_path, output_image_path, 'SPR', palette_name)
+
+    input_image_path = 'output/cropped_model01.jpeg'
+    output_image_path = 'output/filtered_cropped_model01.jpeg'
+    apply_magic_pro_filter(input_image_path, output_image_path, 'GPM', palette_name)
+
+
