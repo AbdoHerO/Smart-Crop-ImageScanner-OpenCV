@@ -39,7 +39,7 @@ def apply_color_palette(image, palette_settings):
     return image
 
 
-def apply_magic_pro_filter(image_path, output_path, model, palette_name=None):
+def apply_magic_pro_filter(image_path, output_path, model, palette_name='custom'):
     settings = constants.model_settings_magicpro_filter[model]
 
     image = cv2.imread(image_path)
