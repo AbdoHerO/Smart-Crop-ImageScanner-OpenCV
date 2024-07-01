@@ -1,11 +1,13 @@
 import cv2
 import numpy as np
-from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel, Frame, Scrollbar, Canvas, Entry, filedialog, StringVar, OptionMenu
+from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel, Frame, Scrollbar, Canvas, Entry, \
+    filedialog, StringVar, OptionMenu, IntVar, Checkbutton
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from PIL import Image, ImageTk
 from constants_temp import model_settings_magicpro_filter
 
 original_image = None
+root = Tk()
 
 palette_settings = {
     'hue_shift': 0,
@@ -14,6 +16,101 @@ palette_settings = {
     'white_intensity': 1.0,
     'black_intensity': 0.1
 }
+
+whiteness_adjustment_var = IntVar()
+
+def adjust_whiteness(image, percentile_value=97.5):
+    """
+    Adjusts the whiteness of the image using the white balancing method.
+
+    :param image: The input image (BGR format).
+    :param percentile_value: Percentile value to normalize the intensity values in the image.
+    :return: The adjusted image.
+    """
+    image = image.astype(np.float32) / 255.0  # Normalize the image
+
+    # Compute the percentile value for each channel
+    percentiles = np.percentile(image, percentile_value, axis=(0, 1))
+
+    # Normalize each channel by its corresponding percentile value
+    white_balanced = np.clip(image / percentiles, 0, 1)
+
+    # Convert back to 8-bit image
+    white_balanced = (white_balanced * 255).astype(np.uint8)
+
+    return white_balanced
+
+
+def correct_skew(image):
+    """
+    Corrects the skew of the image based on the vertical contours of a table.
+
+    :param image: The input image (BGR format).
+    :return: The skew-corrected image.
+    """
+    # Convert the image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Apply GaussianBlur to smoothen the image
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    # Apply edge detection
+    edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
+
+    # Find contours in the edged image
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Draw all contours for visualization
+    contour_image = image.copy()
+    cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 2)
+
+    # Filter for vertical contours
+    vertical_contours = []
+    for contour in contours:
+        x, y, w, h = cv2.boundingRect(contour)
+        aspect_ratio = h / float(w)
+        if aspect_ratio > 3 and h > 100:  # Filter tall and narrow rectangles
+            vertical_contours.append((x, y, w, h, contour))
+
+    # If no vertical contour is found, return the original image
+    if not vertical_contours:
+        return image
+
+    # Sort vertical contours by their x position
+    vertical_contours = sorted(vertical_contours, key=lambda c: c[0])
+
+    # Use the first vertical contour
+    x, y, w, h, first_vertical_contour = vertical_contours[0]
+
+    # Get the minimum area rectangle for the first vertical contour
+    rect = cv2.minAreaRect(first_vertical_contour)
+    box = cv2.boxPoints(rect)
+    box = np.int0(box)
+
+    # Draw the rectangle for visualization
+    cv2.drawContours(contour_image, [box], 0, (255, 0, 0), 2)
+
+    # Calculate the angle of the box
+    angle = rect[-1]
+
+    # Adjust the angle
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+
+    print('angle:', angle)
+
+    # Get the image center
+    (h, w) = image.shape[:2]
+    center = (w // 2, h // 2)
+
+    # Perform the rotation
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+    return rotated, contour_image
+
 
 def apply_magic_pro_filter(image, settings):
     if image is None or image.size == 0:
@@ -37,7 +134,9 @@ def apply_magic_pro_filter(image, settings):
     enhanced_image = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
 
     # Apply noise reduction
-    denoised_image = cv2.fastNlMeansDenoisingColored(enhanced_image, None, settings['h'], settings['hForColorComponents'], settings['templateWindowSize'], settings['searchWindowSize'])
+    denoised_image = cv2.fastNlMeansDenoisingColored(enhanced_image, None, settings['h'],
+                                                     settings['hForColorComponents'], settings['templateWindowSize'],
+                                                     settings['searchWindowSize'])
 
     # Increase contrast and brightness
     adjusted = cv2.convertScaleAbs(denoised_image, alpha=settings['contrast_alpha'], beta=settings['brightness_beta'])
@@ -96,7 +195,14 @@ def apply_magic_pro_filter(image, settings):
     lab = cv2.merge((l, a, b))
     final_image_colored_thickened = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
 
+    if settings['whiteness_adjustment']:
+        final_image_colored_thickened = adjust_whiteness(final_image_colored_thickened, settings['percentile_slider'])
+
+    final_image_colored_thickened = correct_skew(final_image_colored_thickened)  # Correct the skew before further processing
+
+
     return final_image_colored_thickened
+
 
 def apply_color_palette(image, palette_settings):
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -130,6 +236,7 @@ def apply_color_palette(image, palette_settings):
 
     return image
 
+
 def update_image():
     global original_image
     if original_image is None:
@@ -153,7 +260,9 @@ def update_image():
         'adaptive_thresh_C_2': adaptive_thresh_C_2_slider.get(),
         'dilate_kernel_size_2': (dilate_kernel_size_2_slider.get(), dilate_kernel_size_2_slider.get()),
         'dilate_iterations_2': dilate_iterations_2_slider.get(),
-        'black_point': black_point_slider.get()
+        'black_point': black_point_slider.get(),
+        'whiteness_adjustment': whiteness_adjustment_var.get(),
+        'percentile_slider': percentile_slider.get()
     }
 
     processed_image = apply_magic_pro_filter(original_image, settings)
@@ -164,6 +273,11 @@ def update_image():
     if palette_settings:
         processed_image = apply_color_palette(processed_image, palette_settings)
 
+    # Apply whiteness adjustment filter if the checkbox is selected
+    print('whiteness_adjustment_var', whiteness_adjustment_var.get())
+    if whiteness_adjustment_var.get():
+        processed_image = adjust_whiteness(processed_image, percentile_slider.get())
+
     # Resize the image to fit within the display area
     display_image = Image.fromarray(cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB))
     display_image.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
@@ -171,11 +285,13 @@ def update_image():
     image_label.imgtk = imgtk
     image_label.configure(image=imgtk)
 
+
 def open_image():
     global original_image
     file_path = askopenfilename()
     original_image = cv2.imread(file_path)
     update_image()
+
 
 def save_image():
     file_path = asksaveasfilename(defaultextension=".jpg")
@@ -198,14 +314,21 @@ def save_image():
         'adaptive_thresh_C_2': adaptive_thresh_C_2_slider.get(),
         'dilate_kernel_size_2': (dilate_kernel_size_2_slider.get(), dilate_kernel_size_2_slider.get()),
         'dilate_iterations_2': dilate_iterations_2_slider.get(),
-        'black_point': black_point_slider.get()
+        'black_point': black_point_slider.get(),
+        'whiteness_adjustment': whiteness_adjustment_var.get(),
+        'percentile_slider': percentile_slider.get()
     })
 
     # Apply color palette if specified
     if palette_settings:
         processed_image = apply_color_palette(processed_image, palette_settings)
 
+    # Apply whiteness adjustment filter if the checkbox is selected
+    if whiteness_adjustment_var.get():
+        processed_image = adjust_whiteness(processed_image)
+
     cv2.imwrite(file_path, processed_image)
+
 
 def choose_white_color():
     global palette_settings
@@ -215,6 +338,7 @@ def choose_white_color():
         palette_settings['white_intensity'] = white_color
         white_color_button.config(bg=color_code[1])
 
+
 def choose_black_color():
     global palette_settings
     color_code = colorchooser.askcolor(title="Choose Black Color")
@@ -222,6 +346,7 @@ def choose_black_color():
         black_color = color_code[0]
         palette_settings['black_intensity'] = black_color
         black_color_button.config(bg=color_code[1])
+
 
 def open_palette_settings():
     def apply_palette_settings():
@@ -242,23 +367,28 @@ def open_palette_settings():
     hue_shift_slider.set(palette_settings.get('hue_shift', 0))
     hue_shift_slider.grid(row=0, column=0, padx=5, pady=5)
 
-    saturation_factor_slider_palette = Scale(palette_window, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL, label="Saturation Factor")
+    saturation_factor_slider_palette = Scale(palette_window, from_=0.1, to=5, resolution=0.1, orient=HORIZONTAL,
+                                             label="Saturation Factor")
     saturation_factor_slider_palette.set(palette_settings.get('saturation_factor', 1.0))
     saturation_factor_slider_palette.grid(row=0, column=1, padx=5, pady=5)
 
-    brightness_beta_slider_palette = Scale(palette_window, from_=-100, to=100, orient=HORIZONTAL, label="Brightness Beta")
+    brightness_beta_slider_palette = Scale(palette_window, from_=-100, to=100, orient=HORIZONTAL,
+                                           label="Brightness Beta")
     brightness_beta_slider_palette.set(palette_settings.get('brightness_beta', 0))
     brightness_beta_slider_palette.grid(row=1, column=0, padx=5, pady=5)
 
-    white_intensity_slider = Scale(palette_window, from_=0.1, to=2, resolution=0.1, orient=HORIZONTAL, label="White Intensity")
+    white_intensity_slider = Scale(palette_window, from_=0.1, to=2, resolution=0.1, orient=HORIZONTAL,
+                                   label="White Intensity")
     white_intensity_slider.set(palette_settings.get('white_intensity', 1.0))
     white_intensity_slider.grid(row=1, column=1, padx=5, pady=5)
 
-    black_intensity_slider = Scale(palette_window, from_=0.1, to=2, resolution=0.1, orient=HORIZONTAL, label="Black Intensity")
+    black_intensity_slider = Scale(palette_window, from_=0.1, to=2, resolution=0.1, orient=HORIZONTAL,
+                                   label="Black Intensity")
     black_intensity_slider.set(palette_settings.get('black_intensity', 1.0))
     black_intensity_slider.grid(row=2, column=0, padx=5, pady=5)
 
     Button(palette_window, text="Apply", command=apply_palette_settings).grid(row=2, column=1, padx=5, pady=5)
+
 
 def export_filter():
     model_name = model_name_var.get()
@@ -294,7 +424,9 @@ def export_filter():
                 'white_intensity': palette_settings['white_intensity'],
                 'black_intensity': palette_settings['black_intensity']
             }
-        }
+        },
+        'whiteness_adjustment': whiteness_adjustment_var.get(),
+        'percentile_slider': percentile_slider.get()
     }
 
     # Read the existing constants_temp.py file
@@ -312,7 +444,8 @@ def export_filter():
             # Delete the old settings for the model
             del lines[i + 1:j]
             # Insert new settings
-            insert_settings = [f"        '{key}': {value},\n" for key, value in filter_settings.items() if key != 'color_palettes']
+            insert_settings = [f"        '{key}': {value},\n" for key, value in filter_settings.items() if
+                               key != 'color_palettes']
             color_palette_lines = [f"        'color_palettes': {{\n"]
             for palette, settings in filter_settings['color_palettes'].items():
                 color_palette_lines.append(f"            '{palette}': {{\n")
@@ -325,7 +458,8 @@ def export_filter():
     # If the model was not found, append it correctly
     if not model_found:
         lines.append(f"    '{model_name}': {{\n")
-        lines.extend([f"        '{key}': {value},\n" for key, value in filter_settings.items() if key != 'color_palettes'])
+        lines.extend(
+            [f"        '{key}': {value},\n" for key, value in filter_settings.items() if key != 'color_palettes'])
         lines.append("        'color_palettes': {\n")
         for palette, settings in filter_settings['color_palettes'].items():
             lines.append(f"            '{palette}': {{\n")
@@ -341,8 +475,6 @@ def export_filter():
     print(f"Filter settings for model '{model_name}' have been updated.")
 
 
-
-root = Tk()
 root.title("Image Filter Adjuster")
 
 # Create a main frame with horizontal layout
@@ -367,7 +499,6 @@ canvas.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("
 frame = Frame(canvas)
 canvas.create_window((0, 0), window=frame, anchor="nw")
 
-
 # Create sliders for each parameter
 blur_slider = Scale(frame, from_=1, to=20, resolution=2, orient=HORIZONTAL, label="Gaussian Blur")
 blur_slider.set(3)
@@ -389,7 +520,8 @@ brightness_beta_slider = Scale(frame, from_=-100, to=100, orient=HORIZONTAL, lab
 brightness_beta_slider.set(30)
 brightness_beta_slider.grid(row=1, column=1, padx=5, pady=5)
 
-adaptive_thresh_block_size_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size")
+adaptive_thresh_block_size_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL,
+                                          label="Adaptive Threshold Block Size")
 adaptive_thresh_block_size_slider.set(85)
 adaptive_thresh_block_size_slider.grid(row=1, column=2, padx=5, pady=5)
 
@@ -413,7 +545,8 @@ h_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Denoising Str
 h_slider.set(5)
 h_slider.grid(row=3, column=1, padx=5, pady=5)
 
-hForColorComponents_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Denoising Strength for Color Components (hForColorComponents)")
+hForColorComponents_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL,
+                                   label="Denoising Strength for Color Components (hForColorComponents)")
 hForColorComponents_slider.set(0)
 hForColorComponents_slider.grid(row=3, column=2, padx=5, pady=5)
 
@@ -425,7 +558,8 @@ searchWindowSize_slider = Scale(frame, from_=1, to=50, orient=HORIZONTAL, label=
 searchWindowSize_slider.set(1)
 searchWindowSize_slider.grid(row=4, column=1, padx=5, pady=5)
 
-adaptive_thresh_block_size_2_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL, label="Adaptive Threshold Block Size 2")
+adaptive_thresh_block_size_2_slider = Scale(frame, from_=3, to=101, orient=HORIZONTAL,
+                                            label="Adaptive Threshold Block Size 2")
 adaptive_thresh_block_size_2_slider.set(95)
 adaptive_thresh_block_size_2_slider.grid(row=4, column=2, padx=5, pady=5)
 
@@ -445,16 +579,24 @@ black_point_slider = Scale(frame, from_=0, to=100, orient=HORIZONTAL, label="Bla
 black_point_slider.set(10)
 black_point_slider.grid(row=6, column=0, padx=5, pady=5)
 
+whiteness_adjustment_checkbox = Checkbutton(frame, text="Apply Whiteness Adjustment", variable=whiteness_adjustment_var,
+                                            command=update_image)
+whiteness_adjustment_checkbox.grid(row=14, column=0, columnspan=3, padx=5, pady=5)
+
+percentile_slider = Scale(frame, from_=0, to=100, resolution=0.1, orient=HORIZONTAL, label="Percentile Value")
+percentile_slider.set(97.5)
+percentile_slider.grid(row=6, column=3, padx=5, pady=5)
+
 # Add color picker buttons for white and black intensities
 white_color_button = Button(frame, text="Choose White Color", command=choose_white_color)
-white_color_button.grid(row=6, column=1, padx=5, pady=5)
+white_color_button.grid(row=7, column=1, padx=5, pady=5)
 
 black_color_button = Button(frame, text="Choose Black Color", command=choose_black_color)
-black_color_button.grid(row=6, column=2, padx=5, pady=5)
+black_color_button.grid(row=7, column=2, padx=5, pady=5)
 
 # Add button to open color palette settings
-Button(frame, text="Open Color Palette Settings", command=open_palette_settings).grid(row=7, column=0, columnspan=3, padx=5, pady=5)
-
+Button(frame, text="Open Color Palette Settings", command=open_palette_settings).grid(row=8, column=0, columnspan=3,
+                                                                                      padx=5, pady=5)
 
 """ ***************** Add a label and entry for model name """
 
@@ -482,6 +624,8 @@ def load_model_settings(*args):
         dilate_kernel_size_2_slider.set(settings['dilate_kernel_size_2'][0])
         dilate_iterations_2_slider.set(settings['dilate_iterations_2'])
         black_point_slider.set(settings['black_point'])
+        whiteness_adjustment_var.set(settings['whiteness_adjustment'])
+        percentile_slider.set(settings['percentile_slider'])
 
         palette_settings['hue_shift'] = settings['color_palettes']['custom']['hue_shift']
         palette_settings['saturation_factor'] = settings['color_palettes']['custom']['saturation_factor']
@@ -489,17 +633,19 @@ def load_model_settings(*args):
         palette_settings['white_intensity'] = settings['color_palettes']['custom']['white_intensity']
         palette_settings['black_intensity'] = settings['color_palettes']['custom']['black_intensity']
 
+        print('settings', settings  )
+
 
 # Add a label and entry for model name
 model_name_var = StringVar()
 model_name_var.set("GLOBAL")  # Set default value
 model_name_label = Label(frame, text="Model Name")
-model_name_label.grid(row=11, column=0, padx=5, pady=5)
+model_name_label.grid(row=12, column=0, padx=5, pady=5)
 
 # Create a dropdown menu for model names
 model_names = ['GLOBAL', 'SOPHACA', 'SPR', 'GPM', 'SOPHADIMS', 'RECAMED', 'COOPER']
 model_name_dropdown = OptionMenu(frame, model_name_var, *model_names)
-model_name_dropdown.grid(row=11, column=1, columnspan=2, padx=5, pady=5)
+model_name_dropdown.grid(row=12, column=1, columnspan=2, padx=5, pady=5)
 
 # Bind the load_model_settings function to model_name_var
 model_name_var.trace('w', load_model_settings)
@@ -507,22 +653,19 @@ model_name_var.trace('w', load_model_settings)
 # Load the default model settings on startup
 load_model_settings()
 
-
 # Add a button to export the filter settings
 export_button = Button(frame, text="Export Filter", command=export_filter)
-export_button.grid(row=12, column=0, columnspan=3, padx=5, pady=5)
-
+export_button.grid(row=13, column=0, columnspan=3, padx=5, pady=5)
 
 """ ***************** Add a label and entry for model name """
 
-
 # Add buttons to open and save images
-Button(frame, text="Open Image", command=open_image).grid(row=8, column=0, columnspan=3, padx=5, pady=5)
-Button(frame, text="Save Image", command=save_image).grid(row=9, column=0, columnspan=3, padx=5, pady=5)
+Button(frame, text="Open Image", command=open_image).grid(row=9, column=0, columnspan=3, padx=5, pady=5)
+Button(frame, text="Save Image", command=save_image).grid(row=10, column=0, columnspan=3, padx=5, pady=5)
 
 # Add Apply button to apply changes
 apply_button = Button(frame, text="Apply", command=update_image)
-apply_button.grid(row=10, column=0, columnspan=3, padx=5, pady=5)
+apply_button.grid(row=11, column=0, columnspan=3, padx=5, pady=5)
 
 # Create a frame for the image and pack it to the right
 image_frame = Frame(main_frame)
@@ -546,4 +689,3 @@ palette_settings = {
 }
 
 root.mainloop()
-
