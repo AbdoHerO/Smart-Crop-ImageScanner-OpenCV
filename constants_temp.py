@@ -225,3 +225,36 @@ model_settings_magicpro_filter = {
         }
     }
 }
+
+
+# Define width_height_boxes_perc for detect boxes in footer
+width_height_boxes_perc_footer = {
+        'GLOBAL': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+        'COOPER': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+        'SOPHADIMS': {
+            'width': 0.02,
+            'height': 0.02,
+        },
+        'GPM': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+        'RECAMED': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+        'SPR': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+        'SOPHACA': {
+            'width': 0.05,
+            'height': 0.05,
+        },
+    }

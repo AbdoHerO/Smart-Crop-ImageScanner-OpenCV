@@ -4,7 +4,7 @@ from tkinter import Tk, Scale, HORIZONTAL, Button, Label, colorchooser, Toplevel
     filedialog, StringVar, OptionMenu, IntVar, Checkbutton
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from PIL import Image, ImageTk
-from constants_temp import model_settings_magicpro_filter
+from constants_temp import model_settings_magicpro_filter, width_height_boxes_perc_footer
 
 original_image = None
 root = Tk()
@@ -18,6 +18,7 @@ palette_settings = {
 }
 
 whiteness_adjustment_var = IntVar()
+
 
 def adjust_whiteness(image, percentile_value=97.5):
     """
@@ -41,65 +42,74 @@ def adjust_whiteness(image, percentile_value=97.5):
     return white_balanced
 
 
-def correct_skew(image):
+def processing_contours_draw(image):
     """
-    Corrects the skew of the image based on the vertical contours of a table.
-
-    :param image: The input image (BGR format).
-    :return: The skew-corrected image.
+    Export all boxes that contain text and annotate the image.
     """
-    # Convert the image to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    try:
+        original_image = image.copy()
 
-    # Apply GaussianBlur to smoothen the image
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        # Convert the image to gray scale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # Apply edge detection
-    edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
+        # Use Canny edge detection to find edges in the image
+        edges = cv2.Canny(gray, 30, 200, apertureSize=3)  # Lower the threshold to detect more edges
 
-    # Find contours in the edged image
-    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        # Find contours in the edges image
+        contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Draw all contours for visualization
-    contour_image = image.copy()
-    cv2.drawContours(contour_image, contours, -1, (0, 255, 0), 2)
+        # Optionally remove the contours by filling them in
+        cv2.drawContours(original_image, contours, -1, (255, 255, 255), thickness=cv2.FILLED)
 
-    # Filter for vertical contours
-    vertical_contours = []
-    for contour in contours:
-        x, y, w, h = cv2.boundingRect(contour)
-        aspect_ratio = h / float(w)
-        if aspect_ratio > 3 and h > 100:  # Filter tall and narrow rectangles
-            vertical_contours.append((x, y, w, h, contour))
+        # Filter out the contours to keep only those corresponding to single-cell tables
+        single_cell_tables = []
+        for cnt in contours:
+            x, y, w, h = cv2.boundingRect(cnt)  # Get the bounding box dimensions
+            aspect_ratio = w / float(h)
 
-    # If no vertical contour is found, return the original image
-    if not vertical_contours:
+            min_width = original_image.shape[1] * 0.05  # 5% of image width
+            min_height = original_image.shape[0] * 0.05  # 5% of image height
+            aspect_ratio_threshold = 0.5  # Less restrictive
+
+            if w > min_width and h > min_height and aspect_ratio > aspect_ratio_threshold:
+                single_cell_tables.append(cnt)
+
+        # Draw the rectangles for single-cell tables
+        for rect in single_cell_tables:
+            x, y, w, h = cv2.boundingRect(rect)
+            cv2.rectangle(original_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        return single_cell_tables, original_image
+
+    except Exception as e:
+        print(f"Error during contour processing: {e}")
+        return [], image
+
+
+def correct_skew_from_box(image):
+    """
+    Corrects the skew of the image based on the largest detected box.
+    """
+    boxes, annotated_image = processing_contours_draw(image)
+    if not boxes:
+        print("No boxes found")
         return image
 
-    # Sort vertical contours by their x position
-    vertical_contours = sorted(vertical_contours, key=lambda c: c[0])
-
-    # Use the first vertical contour
-    x, y, w, h, first_vertical_contour = vertical_contours[0]
-
-    # Get the minimum area rectangle for the first vertical contour
-    rect = cv2.minAreaRect(first_vertical_contour)
+    # Use the largest box for skew correction
+    largest_box = max(boxes, key=cv2.contourArea)
+    rect = cv2.minAreaRect(largest_box)
     box = cv2.boxPoints(rect)
-    box = np.int0(box)
-
-    # Draw the rectangle for visualization
-    cv2.drawContours(contour_image, [box], 0, (255, 0, 0), 2)
+    box = np.intp(box)
+    print('Detected skew angle:', rect[-1])
 
     # Calculate the angle of the box
     angle = rect[-1]
-
-    # Adjust the angle
     if angle < -45:
         angle = -(90 + angle)
     else:
         angle = -angle
 
-    print('angle:', angle)
+    print('Detected skew angle:', angle)
 
     # Get the image center
     (h, w) = image.shape[:2]
@@ -109,7 +119,7 @@ def correct_skew(image):
     M = cv2.getRotationMatrix2D(center, angle, 1.0)
     rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
-    return rotated, contour_image
+    return rotated, annotated_image
 
 
 def apply_magic_pro_filter(image, settings):
@@ -198,8 +208,9 @@ def apply_magic_pro_filter(image, settings):
     if settings['whiteness_adjustment']:
         final_image_colored_thickened = adjust_whiteness(final_image_colored_thickened, settings['percentile_slider'])
 
-    final_image_colored_thickened = correct_skew(final_image_colored_thickened)  # Correct the skew before further processing
-
+    """------------correct_skew----------"""
+    final_image_colored_thickened, contour_image = correct_skew_from_box(
+        final_image_colored_thickened)  # Correct the skew before further processing
 
     return final_image_colored_thickened
 
@@ -633,7 +644,7 @@ def load_model_settings(*args):
         palette_settings['white_intensity'] = settings['color_palettes']['custom']['white_intensity']
         palette_settings['black_intensity'] = settings['color_palettes']['custom']['black_intensity']
 
-        print('settings', settings  )
+        print('settings', settings)
 
 
 # Add a label and entry for model name
