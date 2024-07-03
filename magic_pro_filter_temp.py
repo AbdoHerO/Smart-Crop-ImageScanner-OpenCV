@@ -20,6 +20,30 @@ palette_settings = {
 whiteness_adjustment_var = IntVar()
 
 
+def remove_wrinkles(image):
+    """
+    Detects and removes wrinkles from a paper document image.
+    :param image: The input image (BGR format).
+    :return: The image with wrinkles removed.
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Use GaussianBlur to smooth the image
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+
+    # Use edge detection to find edges
+    edges = cv2.Canny(blurred, 50, 150)
+
+    # Dilate the edges to make them more prominent
+    kernel = np.ones((1, 1), np.uint8)
+    dilated_edges = cv2.dilate(edges, kernel, iterations=1)
+
+    # Inpaint the wrinkles
+    inpainted_image = cv2.inpaint(image, dilated_edges, 3, cv2.INPAINT_TELEA)
+
+    return inpainted_image
+
+
 def adjust_whiteness(image, percentile_value=97.5):
     """
     Adjusts the whiteness of the image using the white balancing method.
@@ -209,8 +233,11 @@ def apply_magic_pro_filter(image, settings):
         final_image_colored_thickened = adjust_whiteness(final_image_colored_thickened, settings['percentile_slider'])
 
     """------------correct_skew----------"""
-    final_image_colored_thickened, contour_image = correct_skew_from_box(
-        final_image_colored_thickened)  # Correct the skew before further processing
+    # final_image_colored_thickened, contour_image = correct_skew_from_box(
+    #     final_image_colored_thickened)  # Correct the skew before further processing
+
+    """ ---------------remove wrinkles-----------------"""
+    final_image_colored_thickened = remove_wrinkles(final_image_colored_thickened)
 
     return final_image_colored_thickened
 
