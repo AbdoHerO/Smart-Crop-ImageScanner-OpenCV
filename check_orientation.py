@@ -1,99 +1,93 @@
-# Document image orientation correction
-# This approach is based on text orientation
-
-# Assumption: Document image contains all text in same orientation
-
 import cv2
 import numpy as np
-import math
+from PIL import Image
+import os
+import logging
 
-debug = True
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
+def check_image_quality(image_path):
+    result = {
+        "status": "success",
+        "processed_image": None,
+        "messages": []
+    }
 
-def detect_table_contour(img):
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Check file size
+    file_size = os.path.getsize(image_path)
+    min_size, max_size = 1000000, 10000000
+    if not (min_size <= file_size <= max_size):
+        result["status"] = "error"
+        result["messages"].append(f"Image size ({file_size} bytes) is not within acceptable range ({min_size} - {max_size} bytes)")
 
-    # Apply Gaussian blur to reduce noise
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # Read image
+    image = cv2.imread(image_path)
+    if image is None:
+        result["status"] = "error"
+        result["messages"].append("Failed to read image file")
+        return result
 
-    # Detect edges
-    edges = cv2.Canny(blurred, 50, 150, apertureSize=3)
+    # Check resolution
+    height, width = image.shape[:2]
+    min_width, min_height = 1000, 1000
+    if not (width >= min_width and height >= min_height):
+        result["status"] = "error"
+        result["messages"].append(f"Image resolution ({width}x{height}) is below minimum required ({min_width}x{min_height})")
 
-    # Find lines using Hough Transform
-    lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=100, minLineLength=100, maxLineGap=10)
+    # Check contrast
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    contrast = cv2.meanStdDev(gray)[1][0][0]
+    min_contrast = 40
+    if contrast < min_contrast:
+        result["status"] = "error"
+        result["messages"].append(f"Image contrast ({contrast:.2f}) is below minimum required ({min_contrast})")
 
-    if lines is None:
-        return 0  # No lines detected, return 0 angle
+    # Check lighting
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    brightness = hsv[:, :, 2].mean()
+    min_brightness, max_brightness = 100, 250
+    if not (min_brightness <= brightness <= max_brightness):
+        result["status"] = "error"
+        result["messages"].append(f"Image brightness ({brightness:.2f}) is not within acceptable range ({min_brightness} - {max_brightness})")
 
-    # Separate horizontal and vertical lines
-    horizontal_lines = []
-    vertical_lines = []
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
-        if abs(x2 - x1) > abs(y2 - y1):
-            horizontal_lines.append(line)
-        else:
-            vertical_lines.append(line)
+    # Clean image
+    cleaned_image = clean_image(image)
 
-    if not horizontal_lines or not vertical_lines:
-        return 0  # Not enough lines to form a table, return 0 angle
+    # Check orientation
+    if not check_orientation(cleaned_image):
+        cleaned_image = cv2.rotate(cleaned_image, cv2.ROTATE_90_CLOCKWISE)
+        result["messages"].append("Image was rotated to landscape orientation")
 
-    # Find the average angle of horizontal lines
-    angles = []
-    for line in horizontal_lines:
-        x1, y1, x2, y2 = line[0]
-        angle = np.arctan2(y2 - y1, x2 - x1)
-        angles.append(angle)
+    if result["status"] == "success":
+        result["processed_image"] = cleaned_image
+        result["messages"].append("Image preprocessing completed successfully")
+    else:
+        result["messages"].insert(0, "Please improve the image quality and try again")
 
-    avg_angle = np.mean(angles)
-    angle_deg = np.degrees(avg_angle)
+    return result
 
-    # Draw the detected lines
-    for line in horizontal_lines + vertical_lines:
-        x1, y1, x2, y2 = line[0]
-        cv2.line(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+# Helper functions (unchanged)
+def clean_image(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    denoised = cv2.fastNlMeansDenoising(gray)
+    _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return binary
 
-    return angle_deg
+def check_orientation(image):
+    height, width = image.shape[:2]
+    return width > height
 
+# Usage
+image_path = 'images/BLS_3.jpg'
+result = check_image_quality(image_path)
 
-# Display image
-def display(img, frameName="OpenCV Image"):
-    if not debug:
-        return
-    h, w = img.shape[0:2]
-    neww = 800
-    newh = int(neww * (h / w))
-    img = cv2.resize(img, (neww, newh))
-    cv2.imshow(frameName, img)
-    cv2.waitKey(0)
-
-
-# rotate the image with given theta value
-def rotate(img, angle):
-    (h, w) = img.shape[:2]
-    center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
-    rotated = cv2.warpAffine(img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-    return rotated
-
-
-def main(filePath):
-    img = cv2.imread(filePath)
-    original = img.copy()
-
-    # Detect table structure and get angle
-    angle = detect_table_contour(img)
-    print("Table orientation angle:", angle)
-
-    # Rotate the image
-    rotated = rotate(original, angle)  # Note the negative angle here
-
-    # Display results
-    display(img, "Original with detected lines")
-    display(rotated, "Rotated")
-
-
-if __name__ == "__main__":
-    filePath = 'images/model02.jpeg'
-    main(filePath)
+if result["status"] == "success":
+    print("Image processing successful")
+    processed_image = result["processed_image"]
+    # Continue with OCR processing using processed_image
+else:
+    print("Image processing failed. Please address the following issues:")
+    for message in result["messages"]:
+        print(f"- {message}")
